@@ -68,3 +68,40 @@ void directory_close(struct directory *dir)
     iput(dir->inode);
     free(dir);
 }
+
+struct inode *namei(char *path)
+{
+    struct directory *dir;
+    struct directory_entry ent;
+    char *name;
+
+    if (path == NULL || path[0] != '/') {
+        return NULL;
+    }
+
+    if (strcmp(path, "/") == 0) {
+        return iget(ROOT_INODE_NUM);
+    }
+
+    name = path + 1;
+
+    if (strlen(name) == 0 || strchr(name, '/') != NULL) {
+        return NULL;
+    }
+
+    dir = directory_open(ROOT_INODE_NUM);
+
+    if (dir == NULL) {
+        return NULL;
+    }
+
+    while (directory_get(dir, &ent) == 0) {
+        if (strcmp(ent.name, name) == 0) {
+            directory_close(dir);
+            return iget(ent.inode_num);
+        }
+    }
+
+    directory_close(dir);
+    return NULL;
+}
