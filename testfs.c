@@ -359,6 +359,107 @@ static int test_directory_get_root_entries(void)
     return 0;
 }
 
+static int test_namei_root(void)
+{
+    struct inode *in;
+
+    CTEST_ASSERT(image_open(TEST_IMAGE, 1) >= 0);
+
+    incore_free_all();
+    mkfs();
+
+    in = namei("/");
+
+    CTEST_ASSERT(in != NULL);
+    CTEST_ASSERT(in->inode_num == ROOT_INODE_NUM);
+    CTEST_ASSERT(in->ref_count > 0);
+
+    iput(in);
+
+    CTEST_ASSERT(image_close() == 0);
+
+    unlink(TEST_IMAGE);
+
+    return 0;
+}
+
+static int test_directory_make_root_child(void)
+{
+    struct directory *dir;
+    struct directory_entry ent;
+    struct inode *in;
+
+    CTEST_ASSERT(image_open(TEST_IMAGE, 1) >= 0);
+
+    incore_free_all();
+    mkfs();
+
+    CTEST_ASSERT(directory_make("/foo") == 0);
+
+    in = namei("/foo");
+
+    CTEST_ASSERT(in != NULL);
+    CTEST_ASSERT(in->flags == INODE_FLAG_DIR);
+    CTEST_ASSERT(in->size == ROOT_DIR_ENTRY_COUNT * DIR_ENTRY_SIZE);
+
+    dir = directory_open((int)in->inode_num);
+
+    CTEST_ASSERT(dir != NULL);
+
+    CTEST_ASSERT(directory_get(dir, &ent) == 0);
+    CTEST_ASSERT(ent.inode_num == in->inode_num);
+    CTEST_ASSERT(strcmp(ent.name, DIR_ENTRY_DOT) == 0);
+
+    CTEST_ASSERT(directory_get(dir, &ent) == 0);
+    CTEST_ASSERT(ent.inode_num == ROOT_INODE_NUM);
+    CTEST_ASSERT(strcmp(ent.name, DIR_ENTRY_DOT_DOT) == 0);
+
+    directory_close(dir);
+    iput(in);
+
+    CTEST_ASSERT(image_close() == 0);
+
+    unlink(TEST_IMAGE);
+
+    return 0;
+}
+
+static int test_directory_make_invalid_paths(void)
+{
+    CTEST_ASSERT(image_open(TEST_IMAGE, 1) >= 0);
+
+    incore_free_all();
+    mkfs();
+
+    CTEST_ASSERT(directory_make(NULL) == -1);
+    CTEST_ASSERT(directory_make("foo") == -1);
+    CTEST_ASSERT(directory_make("/") == -1);
+    CTEST_ASSERT(directory_make("/foo/bar") == -1);
+
+    CTEST_ASSERT(image_close() == 0);
+
+    unlink(TEST_IMAGE);
+
+    return 0;
+}
+
+static int test_directory_make_duplicate(void)
+{
+    CTEST_ASSERT(image_open(TEST_IMAGE, 1) >= 0);
+
+    incore_free_all();
+    mkfs();
+
+    CTEST_ASSERT(directory_make("/foo") == 0);
+    CTEST_ASSERT(directory_make("/foo") == -1);
+
+    CTEST_ASSERT(image_close() == 0);
+
+    unlink(TEST_IMAGE);
+
+    return 0;
+}
+
 int main(void)
 {
     int failures = 0;
@@ -376,6 +477,10 @@ int main(void)
     CTEST_RUN(test_mkfs);
     CTEST_RUN(test_directory_open_close);
     CTEST_RUN(test_directory_get_root_entries);
+    CTEST_RUN(test_namei_root);
+    CTEST_RUN(test_directory_make_root_child);
+    CTEST_RUN(test_directory_make_invalid_paths);
+    CTEST_RUN(test_directory_make_duplicate);
 
     if (failures == 0) {
         printf("All tests passed\n");
